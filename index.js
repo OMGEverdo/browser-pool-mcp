@@ -148,8 +148,8 @@ async function getOrCreateInstance() {
 
   log(`[browser-pool] Spawning Playwright on port ${port}...`);
 
-  // Spawn Playwright MCP
-  const proc = spawn('npx', ['@playwright/mcp@latest', '--port', String(port), '--isolated'], {
+  // Spawn Playwright MCP with --caps vision to enable screenshot support
+  const proc = spawn('npx', ['@playwright/mcp@latest', '--port', String(port), '--isolated', '--caps', 'vision'], {
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: true,
     windowsHide: false
