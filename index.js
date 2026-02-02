@@ -323,7 +323,7 @@ async function main() {
 
   server.tool('browser_screenshot', 'Take screenshot', {
     fullPage: z.boolean().optional()
-  }, async (args) => proxyToolCall('browser_screenshot', args));
+  }, async (args) => proxyToolCall('browser_take_screenshot', args));
 
   server.tool('browser_close', 'Close browser', {},
     async (args) => proxyToolCall('browser_close', args));
