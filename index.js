@@ -40,6 +40,7 @@ let nextPort = BASE_PORT;
 const sessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 let assignedPort = null;
 let assignedClient = null;
+let hasActivePage = false; // Track if browser has an active page
 
 /**
  * Wait for server to be ready
@@ -241,6 +242,19 @@ async function proxyToolCall(toolName, args) {
 }
 
 /**
+ * Check if browser has an active page, return error if not
+ */
+function requireActivePage() {
+  if (!hasActivePage) {
+    return {
+      content: [{ type: 'text', text: 'Error: No active browser page. Use browser_navigate first to open a page.' }],
+      isError: true
+    };
+  }
+  return null;
+}
+
+/**
  * Handle pool_status specially
  */
 function getPoolStatus() {
@@ -259,7 +273,8 @@ function getPoolStatus() {
         instances: status,
         maxInstances: MAX_INSTANCES,
         thisSession: sessionId,
-        assignedPort
+        assignedPort,
+        hasActivePage
       }, null, 2)
     }]
   };
@@ -289,6 +304,9 @@ async function main() {
       try {
         const result = await proxyToolCall('browser_navigate', args);
         log(`[browser_navigate] result: ${JSON.stringify(result).slice(0, 500)}`);
+        if (!result.isError) {
+          hasActivePage = true; // Mark page as active after successful navigation
+        }
         return result;
       } catch (err) {
         log(`[browser_navigate] ERROR: ${err.message}\n${err.stack}`);
@@ -299,6 +317,8 @@ async function main() {
   server.tool('browser_snapshot', 'Page snapshot', {},
     async () => {
       log(`[browser_snapshot] called`);
+      const check = requireActivePage();
+      if (check) return check;
       try {
         const result = await proxyToolCall('browser_snapshot', {});
         log(`[browser_snapshot] result: ${JSON.stringify(result).slice(0, 500)}`);
@@ -312,73 +332,145 @@ async function main() {
   server.tool('browser_click', 'Click element', {
     element: z.string(),
     ref: z.string()
-  }, async (args) => proxyToolCall('browser_click', args));
+  }, async (args) => {
+    const check = requireActivePage();
+    if (check) return check;
+    return proxyToolCall('browser_click', args);
+  });
 
   server.tool('browser_type', 'Type text', {
     element: z.string(),
     ref: z.string(),
     text: z.string(),
     submit: z.boolean().optional()
-  }, async (args) => proxyToolCall('browser_type', args));
+  }, async (args) => {
+    const check = requireActivePage();
+    if (check) return check;
+    return proxyToolCall('browser_type', args);
+  });
 
   server.tool('browser_screenshot', 'Take screenshot', {
     fullPage: z.boolean().optional()
-  }, async (args) => proxyToolCall('browser_take_screenshot', args));
+  }, async (args) => {
+    const check = requireActivePage();
+    if (check) return check;
+    return proxyToolCall('browser_take_screenshot', args);
+  });
 
   server.tool('browser_close', 'Close browser', {},
-    async (args) => proxyToolCall('browser_close', args));
+    async (args) => {
+      const result = await proxyToolCall('browser_close', args);
+      hasActivePage = false; // Mark page as inactive after close
+      return result;
+    });
 
   server.tool('browser_tabs', 'Manage tabs', {
     action: z.enum(['list', 'new', 'close', 'select']),
     index: z.number().optional()
-  }, async (args) => proxyToolCall('browser_tabs', args));
+  }, async (args) => {
+    // 'new' action can work without active page, others require it
+    if (args.action !== 'new') {
+      const check = requireActivePage();
+      if (check) return check;
+    }
+    const result = await proxyToolCall('browser_tabs', args);
+    // 'new' action creates a page
+    if (args.action === 'new' && !result.isError) {
+      hasActivePage = true;
+    }
+    return result;
+  });
 
   server.tool('browser_navigate_back', 'Go back', {},
-    async (args) => proxyToolCall('browser_navigate_back', args));
+    async (args) => {
+      const check = requireActivePage();
+      if (check) return check;
+      return proxyToolCall('browser_navigate_back', args);
+    });
 
   server.tool('browser_press_key', 'Press key', { key: z.string() },
-    async (args) => proxyToolCall('browser_press_key', args));
+    async (args) => {
+      const check = requireActivePage();
+      if (check) return check;
+      return proxyToolCall('browser_press_key', args);
+    });
 
   server.tool('browser_hover', 'Hover element', {
     element: z.string(),
     ref: z.string()
-  }, async (args) => proxyToolCall('browser_hover', args));
+  }, async (args) => {
+    const check = requireActivePage();
+    if (check) return check;
+    return proxyToolCall('browser_hover', args);
+  });
 
   server.tool('browser_select_option', 'Select option', {
     element: z.string(),
     ref: z.string(),
     values: z.array(z.string())
-  }, async (args) => proxyToolCall('browser_select_option', args));
+  }, async (args) => {
+    const check = requireActivePage();
+    if (check) return check;
+    return proxyToolCall('browser_select_option', args);
+  });
 
   server.tool('browser_evaluate', 'Run JavaScript', { function: z.string() },
-    async (args) => proxyToolCall('browser_evaluate', args));
+    async (args) => {
+      const check = requireActivePage();
+      if (check) return check;
+      return proxyToolCall('browser_evaluate', args);
+    });
 
   server.tool('browser_wait_for', 'Wait for condition', {
     time: z.number().optional(),
     text: z.string().optional(),
     textGone: z.string().optional()
-  }, async (args) => proxyToolCall('browser_wait_for', args));
+  }, async (args) => {
+    const check = requireActivePage();
+    if (check) return check;
+    return proxyToolCall('browser_wait_for', args);
+  });
 
   server.tool('browser_resize', 'Resize window', {
     width: z.number(),
     height: z.number()
-  }, async (args) => proxyToolCall('browser_resize', args));
+  }, async (args) => {
+    const check = requireActivePage();
+    if (check) return check;
+    return proxyToolCall('browser_resize', args);
+  });
 
   server.tool('browser_handle_dialog', 'Handle dialog', {
     accept: z.boolean(),
     promptText: z.string().optional()
-  }, async (args) => proxyToolCall('browser_handle_dialog', args));
+  }, async (args) => {
+    const check = requireActivePage();
+    if (check) return check;
+    return proxyToolCall('browser_handle_dialog', args);
+  });
 
   server.tool('browser_file_upload', 'Upload files', {
     paths: z.array(z.string()).optional()
-  }, async (args) => proxyToolCall('browser_file_upload', args));
+  }, async (args) => {
+    const check = requireActivePage();
+    if (check) return check;
+    return proxyToolCall('browser_file_upload', args);
+  });
 
   server.tool('browser_console_messages', 'Get console', {
     level: z.string().optional()
-  }, async (args) => proxyToolCall('browser_console_messages', args));
+  }, async (args) => {
+    const check = requireActivePage();
+    if (check) return check;
+    return proxyToolCall('browser_console_messages', args);
+  });
 
   server.tool('browser_network_requests', 'Get network requests', {},
-    async (args) => proxyToolCall('browser_network_requests', args));
+    async (args) => {
+      const check = requireActivePage();
+      if (check) return check;
+      return proxyToolCall('browser_network_requests', args);
+    });
 
   server.tool('pool_status', 'Browser pool status', {},
     async () => getPoolStatus());
